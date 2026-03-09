@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Strava Trophy Tree</title>
+<style>
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #0a0a14;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+  padding: 32px 20px;
+}
+
+.phone {
+  width: 375px;
+  height: 812px;
+  background: #000;
+  border-radius: 52px;
+  border: 10px solid #1c1c1e;
+  position: relative;
+  overflow: hidden;
+  box-shadow:
+    0 0 0 2px #2c2c2e,
+    0 40px 100px rgba(0,0,0,0.9),
+    inset 0 0 0 1px #333;
+  flex-shrink: 0;
+}
+.notch {
+  position: absolute;
+  top: 0; left: 50%; transform: translateX(-50%);
+  width: 126px; height: 30px;
+  background: #000;
+  border-radius: 0 0 22px 22px;
+  z-index: 200;
+}
+
+.screen {
+  width: 100%; height: 100%;
+  background: #1c1c1e;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.status-bar {
+  height: 44px; flex-shrink: 0;
+  display: flex; align-items: flex-end;
+  justify-content: space-between;
+  padding: 0 24px 8px;
+}
+.status-time  { color: #fff; font-size: 15px; font-weight: 700; }
+.status-icons { color: #fff; font-size: 12px; display: flex; gap: 4px; align-items: center; }
+
+.tree-header {
+  padding: 4px 20px 8px;
+  display: flex; justify-content: space-between; align-items: center;
+  flex-shrink: 0;
+}
+.tree-title { color: #fff; font-size: 24px; font-weight: 900; letter-spacing: -.3px; }
+.tree-sub   { color: #8e8e93; font-size: 12px; margin-top: 1px; }
+
+.gold-pill {
+  background: linear-gradient(135deg, #FFD60A, #FF9F0A);
+  border-radius: 14px; padding: 7px 14px; text-align: center;
+}
+.gold-num { font-size: 21px; font-weight: 900; color: #1c1c1e; line-height: 1; }
+.gold-lbl { font-size: 9px; font-weight: 800; color: rgba(28,28,30,.65);
+            text-transform: uppercase; letter-spacing: .3px; }
+
+.goal-banner {
+  margin: 0 16px 10px;
+  background: linear-gradient(135deg, #141428, #1a1030);
+  border: 1px solid rgba(252,76,2,.3);
+  border-radius: 14px;
+  padding: 10px 14px;
+  display: flex; align-items: center; gap: 12px;
+  flex-shrink: 0;
+}
+.gb-icon { font-size: 26px; }
+.gb-info { flex: 1; }
+.gb-title { color: #fff; font-size: 14px; font-weight: 800; }
+.gb-meta  { color: #8e8e93; font-size: 12px; margin-top: 1px; }
+.gb-days  {
+  background: rgba(252,76,2,.15); border: 1px solid rgba(252,76,2,.35);
+  border-radius: 8px; padding: 4px 10px;
+  color: #FC4C02; font-size: 12px; font-weight: 800; white-space: nowrap;
+}
+
+.tree-canvas {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+.tree-svg {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+}
+
+.branch { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.b-done    { stroke: #E8B800; }
+.b-current { stroke: #FC4C02; }
+.b-locked  { stroke: #3a3a3c; stroke-dasharray: 7 5; }
+
+.tnode {
+  position: absolute;
+  width: 58px; height: 58px;
+  border-radius: 50%;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: transform .15s;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.tnode:active { transform: scale(.91); }
+
+.tnode.done {
+  background: linear-gradient(145deg, #FFD60A, #e09000);
+  box-shadow: 0 4px 16px rgba(255,214,10,.4);
+}
+
+.tnode.current {
+  background: linear-gradient(145deg, #FC4C02, #b83000);
+  box-shadow: 0 4px 22px rgba(252,76,2,.65);
+  animation: nodePulse 2.2s ease-in-out infinite;
+}
+@keyframes nodePulse {
+  0%,100% { box-shadow: 0 4px 22px rgba(252,76,2,.55); }
+  50%      { box-shadow: 0 4px 38px rgba(252,76,2,.95); }
+}
+
+.pulse-ring {
+  position: absolute;
+  width: 74px; height: 74px;
+  border-radius: 50%;
+  border: 2.5px solid rgba(252,76,2,.45);
+  animation: ringBreath 2.2s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes ringBreath {
+  0%,100% { transform: scale(1);    opacity: .45; }
+  50%      { transform: scale(1.1); opacity: 1;   }
+}
+
+.tnode.locked {
+  background: #2c2c2e;
+  border: 2px dashed #3a3a3c;
+}
+
+.tnode.goal {
+  width: 64px; height: 64px;
+  background: rgba(232,184,0,.12);
+  border: 2.5px solid rgba(232,184,0,.6);
+  box-shadow: 0 0 22px rgba(232,184,0,.2);
+}
+
+.tnode .t-emoji  { font-size: 22px; line-height: 1; }
+.tnode .t-dist   { color: #fff; font-size: 10px; font-weight: 800; margin-top: 1px;
+                   letter-spacing: .2px; text-shadow: 0 1px 3px rgba(0,0,0,.4); }
+.tnode.locked .t-dist { color: #48484a; }
+.tnode.goal .t-dist   { color: rgba(232,184,0,.7); font-size: 9px; }
+
+.t-label {
+  position: absolute;
+  bottom: -19px;
+  font-size: 9.5px; font-weight: 700;
+  color: #fff; white-space: nowrap;
+  text-align: center; letter-spacing: .1px;
+}
+.tnode.locked .t-label  { color: #48484a; }
+.tnode.current .t-label { color: #FC4C02; }
+.tnode.goal .t-label    { color: rgba(232,184,0,.65); font-size: 9px; }
+
+.now-chip {
+  position: absolute;
+  top: -14px;
+  background: #FC4C02;
+  color: #fff;
+  font-size: 9px; font-weight: 900;
+  padding: 2px 7px; border-radius: 6px;
+  letter-spacing: .5px;
+  white-space: nowrap;
+}
+
+.next-up {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  background: rgba(22,22,30,.97);
+  backdrop-filter: blur(20px);
+  border-top: 1px solid #2c2c2e;
+  padding: 10px 16px 14px;
+  display: flex; align-items: center; gap: 12px;
+}
+.nu-icon { font-size: 28px; flex-shrink: 0; }
+.nu-body { flex: 1; }
+.nu-title{ color: #fff; font-size: 14px; font-weight: 800; margin-bottom: 2px; }
+.nu-desc { color: #8e8e93; font-size: 11px; margin-bottom: 7px; }
+.nu-bar-bg   { height: 6px; background: #3a3a3c; border-radius: 6px; overflow: hidden; }
+.nu-bar-fill { height: 100%; border-radius: 6px;
+               background: linear-gradient(to right, #FC4C02, #ff6b35); }
+.nu-nums { display: flex; justify-content: space-between;
+           font-size: 10px; color: #8e8e93; margin-top: 4px; }
+.nu-cta {
+  flex-shrink: 0;
+  background: #FC4C02; color: #fff; border: none;
+  border-radius: 12px; padding: 10px 14px;
+  font-size: 13px; font-weight: 800; cursor: pointer;
+  transition: transform .15s;
+}
+.nu-cta:active { transform: scale(.95); }
+
+.tooltip {
+  position: absolute; z-index: 300;
+  background: #2c2c2e;
+  border: 1px solid #3a3a3c;
+  border-radius: 13px;
+  padding: 12px 14px;
+  width: 195px;
+  box-shadow: 0 12px 32px rgba(0,0,0,.75);
+  pointer-events: none;
+}
+.tt-title  { color: #fff;    font-size: 14px; font-weight: 800; margin-bottom: 3px; }
+.tt-type   { font-size: 11px; font-weight: 700; margin-bottom: 5px; }
+.tt-desc   { color: #8e8e93; font-size: 11px; line-height: 1.4; }
+.tt-done    { color: #FFD60A; }
+.tt-current { color: #FC4C02; }
+.tt-locked  { color: #48484a; }
+
+</style>
+</head>
+<body>
+
+<div class="phone">
+  <div class="notch"></div>
+  <div class="screen">
+
+    <div class="status-bar">
+      <span class="status-time">9:41</span>
+      <div class="status-icons">
+        <span>▲▲▲</span>&nbsp;<span>WiFi</span>&nbsp;<span>🔋</span>
+      </div>
+    </div>
+
+    <div class="tree-header">
+      <div>
+        <div class="tree-title">Training Path 🌳</div>
+        <div class="tree-sub">Tap any run to see details</div>
+      </div>
+      <div class="gold-pill">
+        <div class="gold-num">4</div>
+        <div class="gold-lbl">Runs Done</div>
+      </div>
+    </div>
+
+    <div class="goal-banner">
+      <div class="gb-icon">🏅</div>
+      <div class="gb-info">
+        <div class="gb-title">SF Half Marathon</div>
+        <div class="gb-meta">April 13, 2026 &nbsp;·&nbsp; 21.1 km</div>
+      </div>
+      <div class="gb-days">53 days</div>
+    </div>
+
+    <div class="tree-canvas" id="canvas">
+
+      <svg class="tree-svg" viewBox="0 0 375 520"
+           preserveAspectRatio="xMidYMid meet"
+           xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="bgGlow" cx="50%" cy="90%" r="55%">
+            <stop offset="0%"  stop-color="#1a1a08" stop-opacity=".6"/>
+            <stop offset="100%" stop-color="#1c1c1e" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+        <rect width="375" height="520" fill="url(#bgGlow)"/>
+
+        <path class="branch b-done"
+              d="M 187 468 C 218 452 262 424 285 408"
+              stroke-width="4.5"/>
+        <path class="branch b-current"
+              d="M 285 408 C 258 390 215 358 187 340"
+              stroke-width="4.5"/>
+        <path class="branch b-locked"
+              d="M 187 340 C 160 322 115 290 90 272"
+              stroke-width="4.5"/>
+        <path class="branch b-locked"
+              d="M 90 272 C 132 254 248 218 285 200"
+              stroke-width="4.5"/>
+        <path class="branch b-locked"
+              d="M 285 200 C 248 182 128 143 90 125"
+              stroke-width="4.5"/>
+        <path class="branch b-locked"
+              d="M 90 125 C 122 105 160 76 187 60"
+              stroke-width="4"/>
+      </svg>
+
+      <div class="tnode goal"
+           style="left:155px; top:20px"
+           onclick="showTip(this, '🏆 Half Marathon', 'tt-locked', 'Race Day', 'April 13 · SF Half Marathon · 21.1 km — finish the training plan to unlock')">
+        <span class="t-emoji">🏆</span>
+        <span class="t-dist">21.1K</span>
+        <span class="t-label">Goal Race</span>
+      </div>
+
+      <div class="tnode locked"
+           style="left:61px; top:96px"
+           onclick="showTip(this, '16K Long Run', 'tt-locked', 'Locked', 'Build your longest run yet. Unlock by completing 14K Tempo first.')">
+        <span class="t-emoji">🏃</span>
+        <span class="t-dist">16K</span>
+        <span class="t-label">Long Run</span>
+      </div>
+
+      <div class="tnode locked"
+           style="left:256px; top:171px"
+           onclick="showTip(this, '14K Tempo Run', 'tt-locked', 'Locked', 'Goal pace: 5:45/km. This is where race fitness is built.')">
+        <span class="t-emoji">⚡</span>
+        <span class="t-dist">14K</span>
+        <span class="t-label">Tempo</span>
+      </div>
+
+      <div class="tnode locked"
+           style="left:61px; top:243px"
+           onclick="showTip(this, '12K Easy Run', 'tt-locked', 'Locked', 'Recovery run at comfortable pace. Opens up after 10K Race Pace.')">
+        <span class="t-emoji">🌅</span>
+        <span class="t-dist">12K</span>
+        <span class="t-label">Easy</span>
+      </div>
+
+      <div class="tnode current"
+           style="left:158px; top:311px"
+           onclick="showTip(this, '10K Race Pace', 'tt-current', 'In Progress', 'Target pace: 5:30/km · 8.6 km logged so far. One more run to complete.')">
+        <div class="pulse-ring"></div>
+        <div class="now-chip">NOW</div>
+        <span class="t-emoji">🏃</span>
+        <span class="t-dist">10K</span>
+        <span class="t-label">Race Pace</span>
+      </div>
+
+      <div class="tnode done"
+           style="left:256px; top:379px"
+           onclick="showTip(this, '8K Long Run', 'tt-done', '✓ Completed', 'Finished Mar 2 · 8.1 km · Avg pace 5:48/km · +220 XP earned')">
+        <span class="t-emoji">🏅</span>
+        <span class="t-dist">8K</span>
+        <span class="t-label">Long Run</span>
+      </div>
+
+      <div class="tnode done"
+           style="left:158px; top:439px"
+           onclick="showTip(this, '5K Tempo Run', 'tt-done', '✓ Completed', 'Finished Feb 24 · 5.0 km · Avg pace 5:22/km — your fastest yet! +180 XP')">
+        <span class="t-emoji">🎯</span>
+        <span class="t-dist">5K</span>
+        <span class="t-label">Tempo</span>
+      </div>
+
+      <div class="tooltip" id="tooltip" style="display:none">
+        <div class="tt-title" id="tt-title"></div>
+        <div class="tt-type"  id="tt-type"></div>
+        <div class="tt-desc"  id="tt-desc"></div>
+      </div>
+
+      <div class="next-up">
+        <div class="nu-icon">🏃</div>
+        <div class="nu-body">
+          <div class="nu-title">10K Race Pace · In Progress</div>
+          <div class="nu-desc">8.6 km logged &nbsp;·&nbsp; 1.4 km to go</div>
+          <div class="nu-bar-bg">
+            <div class="nu-bar-fill" style="width:86%"></div>
+          </div>
+          <div class="nu-nums"><span>8.6 km</span><span>Goal: 10 km</span></div>
+        </div>
+        <button class="nu-cta">Log Run</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+let dismissTimer = null;
+
+function showTip(nodeEl, title, typeClass, typeText, desc) {
+  const tt     = document.getElementById('tooltip');
+  const canvas = document.getElementById('canvas');
+
+  document.getElementById('tt-title').textContent = title;
+  const typeEl = document.getElementById('tt-type');
+  typeEl.textContent = typeText;
+  typeEl.className   = 'tt-type ' + typeClass;
+  document.getElementById('tt-desc').textContent = desc;
+
+  const nr = nodeEl.getBoundingClientRect();
+  const cr = canvas.getBoundingClientRect();
+  const TT_W = 195;
+  const TT_H = 95;
+
+  let left = (nr.left - cr.left) + nr.width / 2 - TT_W / 2;
+  let top  = (nr.top  - cr.top) - TT_H - 10;
+
+  left = Math.max(8, Math.min(left, cr.width - TT_W - 8));
+  if (top < 6) top = (nr.bottom - cr.top) + 10;
+
+  tt.style.left    = left + 'px';
+  tt.style.top     = top  + 'px';
+  tt.style.display = 'block';
+
+  clearTimeout(dismissTimer);
+  dismissTimer = setTimeout(() => { tt.style.display = 'none'; }, 2800);
+}
+
+document.getElementById('canvas').addEventListener('click', e => {
+  if (!e.target.closest('.tnode')) {
+    document.getElementById('tooltip').style.display = 'none';
+  }
+});
+</script>
+</body>
+</html>
